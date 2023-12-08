@@ -369,6 +369,7 @@ void* mm_malloc(size_t size) {
   // above code.  It is included as a suggestion of where to start.
   // You will want to replace this return statement...
 
+ fprintf(stderr, "called to allocate %d BYTES, allocating req size of %d BYTES \n", size-WORD_SIZE, req_size); //have to print to standard error to show in debugging
 
  ptr_free_block = search_free_list(req_size); //sets [ptr_free_block] to the pointer of a free block
  //search free list returns a pointer to a blockinfo struct
@@ -376,10 +377,15 @@ void* mm_malloc(size_t size) {
 
   if (ptr_free_block == NULL) {
     // No suitable block found, request more space.
+    fprintf(stderr, "REQUESTING MORE SPACE \n");
     request_more_space(req_size);
     ptr_free_block = search_free_list(req_size);
   }
   
+  
+  fprintf(stderr, "FOUND FREE BLOCK OF %d bytes big\n", SIZE(ptr_free_block->size_and_tags) );
+
+
   // Remove the block we found from the free list.
   remove_free_block(ptr_free_block);
 
@@ -392,6 +398,7 @@ void* mm_malloc(size_t size) {
   //in the case we use a really big free block, we should split the part we dont need to not use all free space in heap
   if (block_size > req_size) {
     //if the block size of our block is greater than the required size needed
+    fprintf(stderr, "splitting block since free block was too big\n");
 
     // Split the block.
     block_info* remaining_block = (block_info*)UNSCALED_POINTER_ADD(ptr_free_block, req_size);  //create a new block pointing to the start of the extra space we will split
@@ -406,16 +413,19 @@ void* mm_malloc(size_t size) {
     ((block_info*)UNSCALED_POINTER_ADD(remaining_block, remaining_block->size_and_tags - WORD_SIZE))->size_and_tags = remaining_block->size_and_tags;
 
 
+    fprintf(stderr, "split block is %d bytes big\n", SIZE(remaining_block->size_and_tags) );
+
     // Insert the remaining block back into the free list.
     insert_free_block(remaining_block);
   } 
   
   else {
     // Use the entire block.
+    fprintf(stderr, "not splitting, perfect size free block found\n");
     ptr_free_block->size_and_tags |= TAG_USED; //sets the used bit
   }
 
-  fprintf(stderr, "allocating %d, req size is %d size \n", size-WORD_SIZE, req_size); //have to print to standard error to show in debugging
+  fprintf(stderr, "allocated %d, req size is %d size \n", size-WORD_SIZE, req_size); //have to print to standard error to show in debugging
   fprintf(stderr, "examining heap \n"); //have to print to standard error to show in debugging
   examine_heap(); //prints current heap, only prints free objects
  
