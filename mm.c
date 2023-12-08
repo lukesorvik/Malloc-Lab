@@ -356,7 +356,7 @@ void* mm_malloc(size_t size) {
 
   // Add one word for the initial size header.
   // Note that we don't need a footer when the block is used/allocated!
-  size += WORD_SIZE;
+  size += WORD_SIZE; //word size is 8B, size of header
   if (size <= MIN_BLOCK_SIZE) {
     // Make sure we allocate enough space for the minimum block size.
     req_size = MIN_BLOCK_SIZE;
@@ -369,31 +369,59 @@ void* mm_malloc(size_t size) {
   // above code.  It is included as a suggestion of where to start.
   // You will want to replace this return statement...
 
-  printf("mm_malloc block size of %d \n", size);
-
-  req_size = size+8; //8 bytes for the header
-
-  if (req_size < MIN_BLOCK_SIZE) {
-    //if the requested size is less than the 32B required minimum block size
-    req_size = MIN_BLOCK_SIZE;
-  }
-
-  ptr_free_block = search_free_list(req_size); //searches list for a block of required size
-  //+8 since header is 64 bits or 8 bytes
-  //returns a blockinfo* pointer, pointer to a block
-  //returns null if not enough space to find block
-  //needs to be at least 32 bytes since we need at least 32B for a free block
-
-
-  examine_heap();
+  examine_heap(); //prints current heap
+ 
+ ptr_free_block = search_free_list(req_size); //sets [ptr_free_block] to the pointer of a free block
+ //search free list returns a pointer to a blockinfo struct
+ //should have tags: current used, prev used, pointers to next, and previous block
 
   if (ptr_free_block == NULL) {
-    //a free block was not found
-    //
+    // No suitable block found, request more space.
+    request_more_space(req_size);
+    ptr_free_block = search_free_list(req_size);
+  }
+  
+  // Remove the block we found from the free list.
+  remove_free_block(ptr_free_block);
+
+  // Check if we need to split the block.
+  size_t block_size = SIZE(ptr_free_block->size_and_tags);
+  //uses the Size() macro to extract the ptr_free_block.size_and_tags
+  //uses the -> to get the size_and_tags size_t info to use in the SIZE macro
+
+  //if the size of the block is greater than the required size, and the min block size
+  //in the case we use a really big free block, we should split the part we dont need to not use all free space in heap
+  if (block_size > req_size) {
+    //if the block size of our block is greater than the required size needed
+
+    // Split the block.
+    block_info* remaining_block = (block_info*)UNSCALED_POINTER_ADD(ptr_free_block, req_size);  //create a new block pointing to the start of the extra space we will split
+    remaining_block->size_and_tags = block_size - req_size; //the size of our block - the size we wanted to allocate
+
+    // Update the size of the allocated block.
+    ptr_free_block->size_and_tags = req_size | TAG_PRECEDING_USED | TAG_USED ;
+    //bitwise or combines the required size and previous preceding bit and tag used bit (now equal to 1)
+    // |tag_used = 1 is a mask for the LSB, when used like this it sets the current tag_used = 1
+
+    // Update the remaining block's footer.
+    ((block_info*)UNSCALED_POINTER_ADD(remaining_block, remaining_block->size_and_tags - WORD_SIZE))->size_and_tags = remaining_block->size_and_tags;
+
+
+    // Insert the remaining block back into the free list.
+    insert_free_block(remaining_block);
+  } 
+  
+  else {
+    // Use the entire block.
+    ptr_free_block->size_and_tags |= TAG_USED; //sets the used bit
   }
 
 
-  return NULL; //returns a void pointer to the allocated space
+
+  // Return a pointer to the payload of the allocated block.
+  return (void*)UNSCALED_POINTER_ADD(ptr_free_block, WORD_SIZE);
+  //moves the pointer ahead 8B since the pointer points to the header, when we want it to return a pointer pointing to the payload
+  //then casts the returned value of the unscaled pointer add back to a void (since it was cast to a char for the macro)
 
   //allocates a block of size _
 
