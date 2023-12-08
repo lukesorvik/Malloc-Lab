@@ -369,8 +369,7 @@ void* mm_malloc(size_t size) {
   // above code.  It is included as a suggestion of where to start.
   // You will want to replace this return statement...
 
-  examine_heap(); //prints current heap
- 
+
  ptr_free_block = search_free_list(req_size); //sets [ptr_free_block] to the pointer of a free block
  //search free list returns a pointer to a blockinfo struct
  //should have tags: current used, prev used, pointers to next, and previous block
@@ -385,7 +384,7 @@ void* mm_malloc(size_t size) {
   remove_free_block(ptr_free_block);
 
   // Check if we need to split the block.
-  size_t block_size = SIZE(ptr_free_block->size_and_tags);
+  block_size = SIZE(ptr_free_block->size_and_tags);
   //uses the Size() macro to extract the ptr_free_block.size_and_tags
   //uses the -> to get the size_and_tags size_t info to use in the SIZE macro
 
@@ -416,7 +415,10 @@ void* mm_malloc(size_t size) {
     ptr_free_block->size_and_tags |= TAG_USED; //sets the used bit
   }
 
-
+  fprintf(stderr, "allocating %d, req size is %d size \n", size-WORD_SIZE, req_size); //have to print to standard error to show in debugging
+  fprintf(stderr, "examining heap \n"); //have to print to standard error to show in debugging
+  examine_heap(); //prints current heap, only prints free objects
+ 
 
   // Return a pointer to the payload of the allocated block.
   return (void*)UNSCALED_POINTER_ADD(ptr_free_block, WORD_SIZE);
