@@ -362,7 +362,8 @@ void* mm_malloc(size_t size) {
   size_t block_size;
   size_t preceding_block_use_tag;
 
-
+  
+   fprintf(stderr, "----------------------------------------------------------------------- \n");
   examine_heap();
 
   // Zero-size requests get NULL.
@@ -389,9 +390,7 @@ void* mm_malloc(size_t size) {
 
 
 
- ptr_free_block = search_free_list(req_size); //sets [ptr_free_block] to the pointer of a free block
- //search free list returns a pointer to a blockinfo struct
- //should have tags: current used, prev used, pointers to next, and previous block
+ ptr_free_block = search_free_list(req_size); //searches free list, returns null if no free list found
 
   if (ptr_free_block == NULL) {
     // No suitable block found, request more space.
@@ -423,7 +422,7 @@ void* mm_malloc(size_t size) {
 
   //if the size of the block is greater than the required size, and the min block size
  
-  if (block_size - req_size >= MIN_BLOCK_SIZE) {
+  if ((block_size - req_size) >= MIN_BLOCK_SIZE) {
     //ONLY SPLITS IF THE SPLITTED FREE BLOCK WOULD FIT THE MINIMUM 32BYTE BLOCK SIZE, 8B HEAD, 8B NEXT, 8B PREV, 8BFOOTER
     //WE WERE GETTING ERROR BECAUSE THE COALESNE FUNCTION WAS TRYING TO ACCESS .NEXT ON 8B BLOCK THAT COULDN'T HAVE A .NEXT
     //ACCSESSING OUT OF BOUNDS CAUSED A SEG FAULT
@@ -439,36 +438,33 @@ void* mm_malloc(size_t size) {
    //change the preceding used tag to 1 for new block, since comes after allocated blocks 
     remaining_block->size_and_tags |= TAG_PRECEDING_USED; //sets the preceding bit used to 1 in the following block
 
+     //sets is allocated to 0 for the split block
+    remaining_block->size_and_tags &= ~TAG_USED; 
+
      // Update the remaining block's footer.
     ((block_info*)UNSCALED_POINTER_ADD(remaining_block, SIZE(remaining_block->size_and_tags) - WORD_SIZE))->size_and_tags = remaining_block->size_and_tags;
 
 
     //Update the size of the allocated block.
-    //bitwise or combines the required size and previous preceding bit and tag used bit (now equal to 1)
-    // |tag_used = 1 is a mask for the LSB, when used like this it sets the current tag_used = 1
-    ptr_free_block->size_and_tags = (req_size & TAG_PRECEDING_USED) | TAG_USED ;
+    size_t free_block_preceding_tag = ptr_free_block->size_and_tags & TAG_PRECEDING_USED; //should be set to 1 if was preceding
+
+    ptr_free_block->size_and_tags = (req_size) | TAG_USED | free_block_preceding_tag ;
     //keeps current tag preceding used if 1, keeps 1, if 0 keeps 1
  
 
     fprintf(stderr, "split block is %d bytes big\n", SIZE(remaining_block->size_and_tags) );
 
-
-    
     // Insert the remaining block back into the free list.
     insert_free_block(remaining_block);
   } 
   
   else {
     // Use the entire block.
-    fprintf(stderr, "not splitting, perfect size free block found\n");
+    fprintf(stderr, "not splitting, split free block would only be %d bytes big\n", (block_size - req_size) );
     ptr_free_block->size_and_tags |= TAG_USED; //sets the used bit
 
-    //if(block_size !=)
-    //need to set next block to say preceding used
-    //Update next blocks header and footer
-   // block_info* following_block = (block_info*)UNSCALED_POINTER_ADD(ptr_free_block, block_size);
-    //following_block->size_and_tags |= TAG_PRECEDING_USED; //sets the preceding bit used to 0 in the following block
-
+    //i think the error has something to do with how i am handling the bits when i do not split
+    //------------------------------------------------------------------------------------------------------------------
     
   }
 
@@ -517,7 +513,9 @@ void mm_free(void* ptr) {
         return;
     }
 
-
+   fprintf(stderr, "----------------------------------------------------------------------- \n");
+  examine_heap();
+  
   //have to test if previous block is allocated somehow
   //or maybe test if head dont set previous block to be allocated
 
