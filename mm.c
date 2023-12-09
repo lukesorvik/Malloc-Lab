@@ -400,9 +400,10 @@ void* mm_malloc(size_t size) {
   remove_free_block(ptr_free_block);
 
   // Check if we need to split the block.
-  block_size = SIZE(ptr_free_block->size_and_tags);
-  //uses the Size() macro to extract the ptr_free_block.size_and_tags
+    //uses the Size() macro to extract the ptr_free_block.size_and_tags
   //uses the -> to get the size_and_tags size_t info to use in the SIZE macro
+  block_size = SIZE(ptr_free_block->size_and_tags);
+
 
   //if the size of the block is greater than the required size, and the min block size
   //in the case we use a really big free block, we should split the part we dont need to not use all free space in heap
@@ -410,21 +411,29 @@ void* mm_malloc(size_t size) {
     //if the block size of our block is greater than the required size needed
     fprintf(stderr, "splitting block since free block was too big\n");
 
-    // Split the block.
+    //Split the block.
     block_info* remaining_block = (block_info*)UNSCALED_POINTER_ADD(ptr_free_block, req_size);  //create a new block pointing to the start of the extra space we will split
+
+    //update size of block to free
     remaining_block->size_and_tags = block_size - req_size; //the size of our block - the size we wanted to allocate
 
-    // Update the size of the allocated block.
-    ptr_free_block->size_and_tags = (req_size | TAG_PRECEDING_USED) | TAG_USED ;
+   //change the preceding used tag to 1 for new block, since comes after allocated blocks 
+    remaining_block->size_and_tags |= TAG_PRECEDING_USED; //sets the preceding bit used to 1 in the following block
+
+     // Update the remaining block's footer.
+    ((block_info*)UNSCALED_POINTER_ADD(remaining_block, SIZE(remaining_block->size_and_tags) - WORD_SIZE))->size_and_tags = remaining_block->size_and_tags;
+
+
+    //Update the size of the allocated block.
     //bitwise or combines the required size and previous preceding bit and tag used bit (now equal to 1)
     // |tag_used = 1 is a mask for the LSB, when used like this it sets the current tag_used = 1
-
-    // Update the remaining block's footer.
-    ((block_info*)UNSCALED_POINTER_ADD(remaining_block, remaining_block->size_and_tags - WORD_SIZE))->size_and_tags = remaining_block->size_and_tags;
-
+    ptr_free_block->size_and_tags = (req_size | TAG_PRECEDING_USED) | TAG_USED ;
+ 
 
     fprintf(stderr, "split block is %d bytes big\n", SIZE(remaining_block->size_and_tags) );
 
+
+    
     // Insert the remaining block back into the free list.
     insert_free_block(remaining_block);
   } 
@@ -489,25 +498,30 @@ void mm_free(void* ptr) {
   fprintf(stderr, "FREE CALLED for %d bytes \n", SIZE(block_to_free->size_and_tags));
 
 
-   //following block starts at end of current block
-  following_block = (block_info*)UNSCALED_POINTER_ADD(block_to_free, SIZE(block_to_free->size_and_tags));
-
-
-
-  //jump to following block and change the preceding used tag to 0
-  following_block->size_and_tags &= ~TAG_PRECEDING_USED; //sets the preceding bit used to 0 in the following block
-
-
   //sets block to free tag used bit to 0
   block_to_free->size_and_tags &= ~TAG_USED; //keeps everything but sets tag used bit to zero for the block we are going to free
-  
 
-   //update the footer size_and_tags for block to free
+
+  //maybe jump to prev block and check if it is allocated?, but how we dont now size?
+
+
+
+  //update the footer size_and_tags for block to free
      //block to free + size - word sizes = start of footer
   //sets the size and tags to be the same as the header
   footer =  ((block_info*)UNSCALED_POINTER_SUB(following_block, WORD_SIZE));
   footer->size_and_tags = block_to_free->size_and_tags;
 
+
+
+   //following block starts at end of current block
+  following_block = (block_info*)UNSCALED_POINTER_ADD(block_to_free, SIZE(block_to_free->size_and_tags));
+
+  //jump to following block and change the preceding used tag to 0
+  following_block->size_and_tags &= ~TAG_PRECEDING_USED; //sets the preceding bit used to 0 in the following block
+
+
+ 
 
     //reinsert the free block into the head of the free list.
    insert_free_block(block_to_free);
