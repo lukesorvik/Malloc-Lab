@@ -287,6 +287,9 @@ static void request_more_space(size_t req_size) {
   // of the heap.
   *((size_t*) UNSCALED_POINTER_ADD(new_block, total_size)) = TAG_USED;
 
+  //~~~~~I added
+  examine_heap();
+
   // Add the new block to the free list and immediately coalesce newly
   // allocated memory space.
   insert_free_block(new_block);
@@ -397,12 +400,19 @@ void* mm_malloc(size_t size) {
 
 
   // Remove the block we found from the free list.
-  remove_free_block(ptr_free_block);
+  if (ptr_free_block != NULL) {
+    remove_free_block(ptr_free_block);
+  }
+  else{ 
+    fprintf(stderr, "NULL POINTER\n" );
+  }
+  
 
   // Check if we need to split the block.
     //uses the Size() macro to extract the ptr_free_block.size_and_tags
   //uses the -> to get the size_and_tags size_t info to use in the SIZE macro
   block_size = SIZE(ptr_free_block->size_and_tags);
+
 
 
   //if the size of the block is greater than the required size, and the min block size
@@ -420,14 +430,19 @@ void* mm_malloc(size_t size) {
    //change the preceding used tag to 1 for new block, since comes after allocated blocks 
     remaining_block->size_and_tags |= TAG_PRECEDING_USED; //sets the preceding bit used to 1 in the following block
 
-     // Update the remaining block's footer.
-    ((block_info*)UNSCALED_POINTER_ADD(remaining_block, SIZE(remaining_block->size_and_tags) - WORD_SIZE))->size_and_tags = remaining_block->size_and_tags;
+    //update footer
+    size_t remaining_block_size = SIZE(remaining_block->size_and_tags);
+    block_info* footer = (block_info*)UNSCALED_POINTER_ADD(remaining_block, remaining_block_size);
+    footer->size_and_tags = remaining_block->size_and_tags;
+
+
 
 
     //Update the size of the allocated block.
     //bitwise or combines the required size and previous preceding bit and tag used bit (now equal to 1)
     // |tag_used = 1 is a mask for the LSB, when used like this it sets the current tag_used = 1
     ptr_free_block->size_and_tags = (req_size | TAG_PRECEDING_USED) | TAG_USED ;
+    //sets it to the required size 
  
 
     fprintf(stderr, "split block is %d bytes big\n", SIZE(remaining_block->size_and_tags) );
