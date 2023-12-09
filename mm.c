@@ -463,6 +463,10 @@ void* mm_malloc(size_t size) {
     fprintf(stderr, "not splitting, split free block would only be %d bytes big\n", (block_size - req_size) );
     ptr_free_block->size_and_tags |= TAG_USED; //sets the used bit
 
+
+    block_info* following_block = (block_info*)UNSCALED_POINTER_ADD(ptr_free_block, block_size);  
+    following_block->size_and_tags |= TAG_PRECEDING_USED;
+
     //i think the error has something to do with how i am handling the bits when i do not split
     //------------------------------------------------------------------------------------------------------------------
     
@@ -515,7 +519,7 @@ void mm_free(void* ptr) {
 
    fprintf(stderr, "----------------------------------------------------------------------- \n");
   examine_heap();
-  
+
   //have to test if previous block is allocated somehow
   //or maybe test if head dont set previous block to be allocated
 
