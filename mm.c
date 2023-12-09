@@ -361,9 +361,10 @@ void* mm_malloc(size_t size) {
   block_info* ptr_free_block = NULL;
   size_t block_size;
   size_t preceding_block_use_tag;
+  int heapSize = mem_heapsize();
+  int usable_size = heapSize - WORD_SIZE*2; //one for heap header, and heap footer
 
-
-  examine_heap();
+fprintf(stderr, "usable size %d bytes \n", usable_size; //have to print to standard error to show in debugging
 
   // Zero-size requests get NULL.
   if (size == 0) {
@@ -388,13 +389,23 @@ void* mm_malloc(size_t size) {
  fprintf(stderr, "called to allocate %d BYTES, allocating req size of %d BYTES \n", size-WORD_SIZE, req_size); //have to print to standard error to show in debugging
 
 
+ptr_free_block = search_free_list(req_size);
 
- ptr_free_block = search_free_list(req_size); //sets [ptr_free_block] to the pointer of a free block
- //search free list returns a pointer to a blockinfo struct
- //should have tags: current used, prev used, pointers to next, and previous block
+if (ptr_free_block != NULL) {
 
-  if (ptr_free_block == NULL) {
-    // No suitable block found, request more space.
+    //check if footer is the heap footer (is allocated)
+}
+
+else{
+  //null could not find
+  //allocate more space
+}
+
+
+  if (req_size > usable_size ) {
+    //if required size for block greater than usable size (so that we dont overwrite heap headers and foots)
+    //allocate more space then search
+
     fprintf(stderr, "REQUESTING MORE SPACE \n");
      fprintf(stderr, "current size of heap %d bytes \n", mem_heapsize());
     
@@ -405,12 +416,18 @@ void* mm_malloc(size_t size) {
      fprintf(stderr, "done requesting space \n");
 
     ptr_free_block = search_free_list(req_size);
+
+
   }
-  
+
+  else  {
+    //should have enough space in cache to not overwrite
+     ptr_free_block = search_free_list(req_size);
+  }
+
  
 
   fprintf(stderr, "FOUND FREE BLOCK OF %d bytes big\n", SIZE(ptr_free_block->size_and_tags) );
-
 
   // Remove the block we found from the free list.
   remove_free_block(ptr_free_block);
