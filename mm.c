@@ -371,6 +371,8 @@ void* mm_malloc(size_t size) {
 
  fprintf(stderr, "called to allocate %d BYTES, allocating req size of %d BYTES \n", size-WORD_SIZE, req_size); //have to print to standard error to show in debugging
 
+
+
  ptr_free_block = search_free_list(req_size); //sets [ptr_free_block] to the pointer of a free block
  //search free list returns a pointer to a blockinfo struct
  //should have tags: current used, prev used, pointers to next, and previous block
@@ -378,11 +380,19 @@ void* mm_malloc(size_t size) {
   if (ptr_free_block == NULL) {
     // No suitable block found, request more space.
     fprintf(stderr, "REQUESTING MORE SPACE \n");
-    request_more_space(req_size);
+     fprintf(stderr, "current size of heap %d bytes \n", mem_heapsize());
+    
+    request_more_space(req_size); //throws errpr when we request 56 bytes???? , seg fault
+    //maybe since the allocated block is not in free list?
+    //error when freeblock->next is called
+
+     fprintf(stderr, "done requesting space \n");
+
     ptr_free_block = search_free_list(req_size);
   }
   
-  
+ 
+
   fprintf(stderr, "FOUND FREE BLOCK OF %d bytes big\n", SIZE(ptr_free_block->size_and_tags) );
 
 
@@ -405,7 +415,7 @@ void* mm_malloc(size_t size) {
     remaining_block->size_and_tags = block_size - req_size; //the size of our block - the size we wanted to allocate
 
     // Update the size of the allocated block.
-    ptr_free_block->size_and_tags = req_size | TAG_PRECEDING_USED | TAG_USED ;
+    ptr_free_block->size_and_tags = (req_size | TAG_PRECEDING_USED) | TAG_USED ;
     //bitwise or combines the required size and previous preceding bit and tag used bit (now equal to 1)
     // |tag_used = 1 is a mask for the LSB, when used like this it sets the current tag_used = 1
 
@@ -460,9 +470,54 @@ void mm_free(void* ptr) {
   size_t payload_size;
   block_info* block_to_free;
   block_info* following_block;
+  block_info* footer;
 
   // TODO: Implement mm_free.  You can change or remove the declaraions
   // above.  They are included as minor hints.
+
+  if (ptr == NULL) {
+        return;
+    }
+
+
+
+  // Convert the given used block into a free block.
+  //subtracts the pointer to the block by the word size, given allocated block will point to payload so we need to move back 8bytes to get to start of block (header)
+  //block to free points to start of block
+  block_to_free = (block_info*)UNSCALED_POINTER_SUB(ptr, WORD_SIZE);
+
+  fprintf(stderr, "FREE CALLED for %d bytes \n", SIZE(block_to_free->size_and_tags));
+
+
+   //following block starts at end of current block
+  following_block = (block_info*)UNSCALED_POINTER_ADD(block_to_free, SIZE(block_to_free->size_and_tags));
+
+
+
+  //jump to following block and change the preceding used tag to 0
+  following_block->size_and_tags &= ~TAG_PRECEDING_USED; //sets the preceding bit used to 0 in the following block
+
+
+  //sets block to free tag used bit to 0
+  block_to_free->size_and_tags &= ~TAG_USED; //keeps everything but sets tag used bit to zero for the block we are going to free
+  
+
+   //update the footer size_and_tags for block to free
+     //block to free + size - word sizes = start of footer
+  //sets the size and tags to be the same as the header
+  footer =  ((block_info*)UNSCALED_POINTER_SUB(following_block, WORD_SIZE));
+  footer->size_and_tags = block_to_free->size_and_tags;
+
+
+    //reinsert the free block into the head of the free list.
+   insert_free_block(block_to_free);
+
+    //coalesce preceding and following blocks if necessary.
+  coalesce_free_block(block_to_free);
+
+  examine_heap();
+
+  //if we free a block we need to change the block afters bits of preceding used to 0
 
 }
 
