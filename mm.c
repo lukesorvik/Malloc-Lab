@@ -198,7 +198,6 @@ static void remove_free_block(block_info* free_block) {
 /* Coalesce 'old_block' with any preceding or following free blocks. */
 static void coalesce_free_block(block_info* old_block) {
    fprintf(stderr, "coalescing\n");
-  examine_heap();
   block_info* block_cursor;
   block_info* new_block;
   block_info* free_block;
@@ -234,7 +233,6 @@ static void coalesce_free_block(block_info* old_block) {
   block_cursor = (block_info*) UNSCALED_POINTER_ADD(old_block, old_size);
   while ((block_cursor->size_and_tags & TAG_USED) == 0) {
     fprintf(stderr, "coalescing with any following free block\n");
-    examine_heap();
     // While following block is free:
 
     size_t size = SIZE(block_cursor->size_and_tags);
@@ -250,7 +248,7 @@ static void coalesce_free_block(block_info* old_block) {
   // and add the new entry.
   if (new_size != old_size) {
     fprintf(stderr, "coalesced, removing any old blocks\n");
-    examine_heap();
+
     // Remove the original block from the free list
     remove_free_block(old_block);
 
@@ -267,7 +265,6 @@ static void coalesce_free_block(block_info* old_block) {
   }
 
   fprintf(stderr, "done coalescing\n");
-  examine_heap();
   return;
 }
 
@@ -364,7 +361,7 @@ void* mm_malloc(size_t size) {
 
   
    fprintf(stderr, "----------------------------------------------------------------------- \n");
-  examine_heap();
+  //examine_heap();
 
   // Zero-size requests get NULL.
   if (size == 0) {
@@ -474,7 +471,7 @@ void* mm_malloc(size_t size) {
 
   fprintf(stderr, "allocated %d, req size is %d size \n", size-WORD_SIZE, req_size); //have to print to standard error to show in debugging
   fprintf(stderr, "examining heap \n"); //have to print to standard error to show in debugging
-  examine_heap(); //prints current heap, only prints free objects
+
  
 
   // Return a pointer to the payload of the allocated block.
@@ -518,8 +515,7 @@ void mm_free(void* ptr) {
     }
 
    fprintf(stderr, "----------------------------------------------------------------------- \n");
-  examine_heap();
-
+  //examine_heap()
   //have to test if previous block is allocated somehow
   //or maybe test if head dont set previous block to be allocated
 
@@ -562,7 +558,7 @@ void mm_free(void* ptr) {
 
 
 
-  examine_heap();
+  //examine_heap();
 
   //if we free a block we need to change the block afters bits of preceding used to 0
 
