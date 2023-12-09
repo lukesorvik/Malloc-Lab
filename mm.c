@@ -197,6 +197,7 @@ static void remove_free_block(block_info* free_block) {
 
 /* Coalesce 'old_block' with any preceding or following free blocks. */
 static void coalesce_free_block(block_info* old_block) {
+   fprintf(stderr, "coalescing\n");
   examine_heap();
   block_info* block_cursor;
   block_info* new_block;
@@ -209,6 +210,7 @@ static void coalesce_free_block(block_info* old_block) {
   // Coalesce with any preceding free block
   block_cursor = old_block;
   while ((block_cursor->size_and_tags & TAG_PRECEDING_USED) == 0) {
+    fprintf(stderr, "coalescing with any preceding free block\n");
     // While the block preceding this one in memory (not the
     // prev. block in the free list) is free:
 
@@ -225,10 +227,14 @@ static void coalesce_free_block(block_info* old_block) {
   }
   new_block = block_cursor;
 
+
+  
   // Coalesce with any following free block.
   // Start with the block following this one in memory
   block_cursor = (block_info*) UNSCALED_POINTER_ADD(old_block, old_size);
   while ((block_cursor->size_and_tags & TAG_USED) == 0) {
+    fprintf(stderr, "coalescing with any following free block\n");
+    examine_heap();
     // While following block is free:
 
     size_t size = SIZE(block_cursor->size_and_tags);
@@ -239,9 +245,12 @@ static void coalesce_free_block(block_info* old_block) {
     block_cursor = (block_info*) UNSCALED_POINTER_ADD(block_cursor, size);
   }
 
+   
   // If the block actually grew, remove the old entry from the free-list
   // and add the new entry.
   if (new_size != old_size) {
+    fprintf(stderr, "coalesced, removing any old blocks\n");
+    examine_heap();
     // Remove the original block from the free list
     remove_free_block(old_block);
 
@@ -256,6 +265,9 @@ static void coalesce_free_block(block_info* old_block) {
     // Put the new block in the free list.
     insert_free_block(new_block);
   }
+
+  fprintf(stderr, "done coalescing\n");
+  examine_heap();
   return;
 }
 
@@ -350,6 +362,9 @@ void* mm_malloc(size_t size) {
   size_t block_size;
   size_t preceding_block_use_tag;
 
+
+  examine_heap();
+
   // Zero-size requests get NULL.
   if (size == 0) {
     return NULL;
@@ -408,8 +423,13 @@ void* mm_malloc(size_t size) {
 
   //if the size of the block is greater than the required size, and the min block size
   //in the case we use a really big free block, we should split the part we dont need to not use all free space in heap
-  if (block_size > req_size) {
-    //if the block size of our block is greater than the required size needed
+  //if the block size of 
+
+  if (block_size - req_size >= MIN_BLOCK_SIZE) {
+    //ONLY SPLITS IF THE SPLITTED FREE BLOCK WOULD FIT THE MINIMUM 32BYTE BLOCK SIZE, 8B HEAD, 8B NEXT, 8B PREV, 8BFOOTER
+    //WE WERE GETTING ERROR BECAUSE THE COALESNE FUNCTION WAS TRYING TO ACCESS .NEXT ON 8B BLOCK THAT COULDN'T HAVE A .NEXT
+    //ACCSESSING OUT OF BOUNDS CAUSED A SEG FAULT
+
     fprintf(stderr, "splitting block since free block was too big\n");
 
     //Split the block.
@@ -443,6 +463,7 @@ void* mm_malloc(size_t size) {
     // Use the entire block.
     fprintf(stderr, "not splitting, perfect size free block found\n");
     ptr_free_block->size_and_tags |= TAG_USED; //sets the used bit
+    
   }
 
   fprintf(stderr, "allocated %d, req size is %d size \n", size-WORD_SIZE, req_size); //have to print to standard error to show in debugging
@@ -511,11 +532,6 @@ void mm_free(void* ptr) {
 
   //maybe jump to prev block and check if it is allocated?, but how we dont now size?
 
- fprintf(stderr, "1 \n");
-
-
-
-
 
    //following block starts at end of current block
   following_block = (block_info*)UNSCALED_POINTER_ADD(block_to_free, block_size);
@@ -523,7 +539,7 @@ void mm_free(void* ptr) {
   //jump to following block and change the preceding used tag to 0
   following_block->size_and_tags &= ~TAG_PRECEDING_USED; //sets the preceding bit used to 0 in the following block
 
-  fprintf(stderr, "2 \n");
+
 
     //update the footer size_and_tags for block to free
      //block to free + size - word sizes = start of footer
@@ -532,17 +548,13 @@ void mm_free(void* ptr) {
   footer->size_and_tags = block_to_free->size_and_tags;
 
 
- fprintf(stderr, "3 \n");
-
     //reinsert the free block into the head of the free list.
    insert_free_block(block_to_free);
 
-    fprintf(stderr, "4 \n");
 
     //coalesce preceding and following blocks if necessary.
   coalesce_free_block(block_to_free);
 
-  fprintf(stderr, "5 \n");
 
 
   examine_heap();
