@@ -361,10 +361,9 @@ void* mm_malloc(size_t size) {
   block_info* ptr_free_block = NULL;
   size_t block_size;
   size_t preceding_block_use_tag;
-  int heapSize = mem_heapsize();
-  int usable_size = heapSize - WORD_SIZE*2; //one for heap header, and heap footer
 
-fprintf(stderr, "usable size %d bytes \n", usable_size; //have to print to standard error to show in debugging
+
+  examine_heap();
 
   // Zero-size requests get NULL.
   if (size == 0) {
@@ -389,23 +388,13 @@ fprintf(stderr, "usable size %d bytes \n", usable_size; //have to print to stand
  fprintf(stderr, "called to allocate %d BYTES, allocating req size of %d BYTES \n", size-WORD_SIZE, req_size); //have to print to standard error to show in debugging
 
 
-ptr_free_block = search_free_list(req_size);
 
-if (ptr_free_block != NULL) {
+ ptr_free_block = search_free_list(req_size); //sets [ptr_free_block] to the pointer of a free block
+ //search free list returns a pointer to a blockinfo struct
+ //should have tags: current used, prev used, pointers to next, and previous block
 
-    //check if footer is the heap footer (is allocated)
-}
-
-else{
-  //null could not find
-  //allocate more space
-}
-
-
-  if (req_size > usable_size ) {
-    //if required size for block greater than usable size (so that we dont overwrite heap headers and foots)
-    //allocate more space then search
-
+  if (ptr_free_block == NULL) {
+    // No suitable block found, request more space.
     fprintf(stderr, "REQUESTING MORE SPACE \n");
      fprintf(stderr, "current size of heap %d bytes \n", mem_heapsize());
     
@@ -416,18 +405,12 @@ else{
      fprintf(stderr, "done requesting space \n");
 
     ptr_free_block = search_free_list(req_size);
-
-
   }
-
-  else  {
-    //should have enough space in cache to not overwrite
-     ptr_free_block = search_free_list(req_size);
-  }
-
+  
  
 
   fprintf(stderr, "FOUND FREE BLOCK OF %d bytes big\n", SIZE(ptr_free_block->size_and_tags) );
+
 
   // Remove the block we found from the free list.
   remove_free_block(ptr_free_block);
@@ -439,9 +422,7 @@ else{
 
 
   //if the size of the block is greater than the required size, and the min block size
-  //in the case we use a really big free block, we should split the part we dont need to not use all free space in heap
-  //if the block size of 
-
+ 
   if (block_size - req_size >= MIN_BLOCK_SIZE) {
     //ONLY SPLITS IF THE SPLITTED FREE BLOCK WOULD FIT THE MINIMUM 32BYTE BLOCK SIZE, 8B HEAD, 8B NEXT, 8B PREV, 8BFOOTER
     //WE WERE GETTING ERROR BECAUSE THE COALESNE FUNCTION WAS TRYING TO ACCESS .NEXT ON 8B BLOCK THAT COULDN'T HAVE A .NEXT
@@ -465,7 +446,8 @@ else{
     //Update the size of the allocated block.
     //bitwise or combines the required size and previous preceding bit and tag used bit (now equal to 1)
     // |tag_used = 1 is a mask for the LSB, when used like this it sets the current tag_used = 1
-    ptr_free_block->size_and_tags = (req_size | TAG_PRECEDING_USED) | TAG_USED ;
+    ptr_free_block->size_and_tags = (req_size & TAG_PRECEDING_USED) | TAG_USED ;
+    //keeps current tag preceding used if 1, keeps 1, if 0 keeps 1
  
 
     fprintf(stderr, "split block is %d bytes big\n", SIZE(remaining_block->size_and_tags) );
@@ -480,6 +462,13 @@ else{
     // Use the entire block.
     fprintf(stderr, "not splitting, perfect size free block found\n");
     ptr_free_block->size_and_tags |= TAG_USED; //sets the used bit
+
+    //if(block_size !=)
+    //need to set next block to say preceding used
+    //Update next blocks header and footer
+   // block_info* following_block = (block_info*)UNSCALED_POINTER_ADD(ptr_free_block, block_size);
+    //following_block->size_and_tags |= TAG_PRECEDING_USED; //sets the preceding bit used to 0 in the following block
+
     
   }
 
@@ -545,9 +534,6 @@ void mm_free(void* ptr) {
 
   //sets block to free tag used bit to 0
   block_to_free->size_and_tags &= ~TAG_USED; //keeps everything but sets tag used bit to zero for the block we are going to free
-
-
-  //maybe jump to prev block and check if it is allocated?, but how we dont now size?
 
 
    //following block starts at end of current block
