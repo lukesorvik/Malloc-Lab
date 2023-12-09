@@ -197,6 +197,7 @@ static void remove_free_block(block_info* free_block) {
 
 /* Coalesce 'old_block' with any preceding or following free blocks. */
 static void coalesce_free_block(block_info* old_block) {
+  examine_heap();
   block_info* block_cursor;
   block_info* new_block;
   block_info* free_block;
@@ -204,8 +205,6 @@ static void coalesce_free_block(block_info* old_block) {
   size_t old_size = SIZE(old_block->size_and_tags);
   // running sum to be size of final coalesced block
   size_t new_size = old_size;
-
-  printf(stderr, "block cursor = %p: \n", block_cursor);
 
   // Coalesce with any preceding free block
   block_cursor = old_block;
@@ -289,15 +288,9 @@ static void request_more_space(size_t req_size) {
   // of the heap.
   *((size_t*) UNSCALED_POINTER_ADD(new_block, total_size)) = TAG_USED;
 
-  //~~~~~I added
-  printf(stderr, "request more space, before call insert free block: \n");
-  examine_heap();
-
   // Add the new block to the free list and immediately coalesce newly
   // allocated memory space.
   insert_free_block(new_block);
-
-  printf(stderr, "request more space, before call coalesce free block: \n");
   coalesce_free_block(new_block);
 }
 
@@ -405,13 +398,7 @@ void* mm_malloc(size_t size) {
 
 
   // Remove the block we found from the free list.
-  if (ptr_free_block != NULL) {
-    remove_free_block(ptr_free_block);
-  }
-  else{ 
-    fprintf(stderr, "NULL POINTER\n" );
-  }
-  
+  remove_free_block(ptr_free_block);
 
   // Check if we need to split the block.
     //uses the Size() macro to extract the ptr_free_block.size_and_tags
@@ -419,13 +406,9 @@ void* mm_malloc(size_t size) {
   block_size = SIZE(ptr_free_block->size_and_tags);
 
 
-
   //if the size of the block is greater than the required size, and the min block size
   //in the case we use a really big free block, we should split the part we dont need to not use all free space in heap
-  //min blocksize is 32, we cannot have a split block less than that 
-  if ((block_size - req_size) >= 32) {
-    //if the difference between the block size and the required size is more than 32, then we split (since we will have 32 bytes min for a block)
-
+  if (block_size > req_size) {
     //if the block size of our block is greater than the required size needed
     fprintf(stderr, "splitting block since free block was too big\n");
 
@@ -438,19 +421,14 @@ void* mm_malloc(size_t size) {
    //change the preceding used tag to 1 for new block, since comes after allocated blocks 
     remaining_block->size_and_tags |= TAG_PRECEDING_USED; //sets the preceding bit used to 1 in the following block
 
-    //update footer
-    size_t remaining_block_size = SIZE(remaining_block->size_and_tags);
-    block_info* footer = (block_info*)UNSCALED_POINTER_ADD(remaining_block, remaining_block_size);
-    footer->size_and_tags = remaining_block->size_and_tags;
-
-
+     // Update the remaining block's footer.
+    ((block_info*)UNSCALED_POINTER_ADD(remaining_block, SIZE(remaining_block->size_and_tags) - WORD_SIZE))->size_and_tags = remaining_block->size_and_tags;
 
 
     //Update the size of the allocated block.
     //bitwise or combines the required size and previous preceding bit and tag used bit (now equal to 1)
     // |tag_used = 1 is a mask for the LSB, when used like this it sets the current tag_used = 1
     ptr_free_block->size_and_tags = (req_size | TAG_PRECEDING_USED) | TAG_USED ;
-    //sets it to the required size 
  
 
     fprintf(stderr, "split block is %d bytes big\n", SIZE(remaining_block->size_and_tags) );
@@ -499,7 +477,7 @@ updating?)
 
 /* Free the block referenced by ptr. */
 void mm_free(void* ptr) {
-   size_t payload_size;
+  size_t payload_size;
   block_info* block_to_free;
   block_info* following_block;
   block_info* footer;
@@ -582,4 +560,3 @@ int mm_check() {
   // TODO: Implement a heap consistency checker as needed/desired.
   return 0;
 }
-
