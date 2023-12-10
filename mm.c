@@ -197,7 +197,6 @@ static void remove_free_block(block_info* free_block) {
 
 /* Coalesce 'old_block' with any preceding or following free blocks. */
 static void coalesce_free_block(block_info* old_block) {
-   fprintf(stderr, "coalescing\n");
   block_info* block_cursor;
   block_info* new_block;
   block_info* free_block;
@@ -209,7 +208,6 @@ static void coalesce_free_block(block_info* old_block) {
   // Coalesce with any preceding free block
   block_cursor = old_block;
   while ((block_cursor->size_and_tags & TAG_PRECEDING_USED) == 0) {
-    fprintf(stderr, "coalescing with any preceding free block\n");
     // While the block preceding this one in memory (not the
     // prev. block in the free list) is free:
 
@@ -226,13 +224,10 @@ static void coalesce_free_block(block_info* old_block) {
   }
   new_block = block_cursor;
 
-
-  
   // Coalesce with any following free block.
   // Start with the block following this one in memory
   block_cursor = (block_info*) UNSCALED_POINTER_ADD(old_block, old_size);
   while ((block_cursor->size_and_tags & TAG_USED) == 0) {
-    fprintf(stderr, "coalescing with any following free block\n");
     // While following block is free:
 
     size_t size = SIZE(block_cursor->size_and_tags);
@@ -243,12 +238,9 @@ static void coalesce_free_block(block_info* old_block) {
     block_cursor = (block_info*) UNSCALED_POINTER_ADD(block_cursor, size);
   }
 
-   
   // If the block actually grew, remove the old entry from the free-list
   // and add the new entry.
   if (new_size != old_size) {
-    fprintf(stderr, "coalesced, removing any old blocks\n");
-
     // Remove the original block from the free list
     remove_free_block(old_block);
 
@@ -263,8 +255,6 @@ static void coalesce_free_block(block_info* old_block) {
     // Put the new block in the free list.
     insert_free_block(new_block);
   }
-
-  fprintf(stderr, "done coalescing\n");
   return;
 }
 
@@ -353,217 +343,182 @@ int mm_init() {
  * Allocate a block of size size and return a pointer to it. If size is zero,
  * returns NULL.
  */
-void* mm_malloc(size_t size) {
+
+/*
+My steps for allocating
+1) add size of header to requested size to allocate (factor in alignment, minimum block size, etc)
+a. if size+header is less than minimum block size, make the size to allocate the min block size
+b. if size+header > min block size: make sure size+header is aligned
+2. Call search_free_list() to get a free block that is large enough
+a. if no block large enough is found, request more space
+3. Remove that block from the free list
+a. May need to split block if free block from splitting would be more than 32bytes(minimum block size)
+  b. reinsert free block into the free list if we split
+4. Update size_and_tags appropriately
+if split:
+set header of new free block: prev_allocated = 2, is_allocated 0, update size
+update footer to match the header of new free block
+set current block: copy previous_allocated bit(if was 1 before splitting keep), update size, set is allocated = 1
+  if no split:
+  set is allocated = 1
+  set following blocks preceding_allocated =2
+
+5. Return a pointer to the payload of that block
+*/
+void *mm_malloc(size_t size)
+{
+
   size_t req_size;
-  block_info* ptr_free_block = NULL;
+  block_info *ptr_free_block = NULL;
   size_t block_size;
   size_t preceding_block_use_tag;
 
-  
-   fprintf(stderr, "----------------------------------------------------------------------- \n");
-  //examine_heap();
-
   // Zero-size requests get NULL.
-  if (size == 0) {
+  if (size == 0)
+  {
     return NULL;
   }
 
   // Add one word for the initial size header.
   // Note that we don't need a footer when the block is used/allocated!
-  size += WORD_SIZE; //word size is 8B, size of header
-  if (size <= MIN_BLOCK_SIZE) {
+  size += WORD_SIZE; // word size is 8B, size of header
+  if (size <= MIN_BLOCK_SIZE)
+  {
     // Make sure we allocate enough space for the minimum block size.
     req_size = MIN_BLOCK_SIZE;
-  } else {
+  }
+  else
+  {
     // Round up for proper alignment.
     req_size = ALIGNMENT * ((size + ALIGNMENT - 1) / ALIGNMENT);
   }
 
-  // TODO: Implement mm_malloc.  You can change or remove any of the
-  // above code.  It is included as a suggestion of where to start.
-  // You will want to replace this return statement...
+  ptr_free_block = search_free_list(req_size); // searches free list, returns null if no free list found
 
- fprintf(stderr, "called to allocate %d BYTES, allocating req size of %d BYTES \n", size-WORD_SIZE, req_size); //have to print to standard error to show in debugging
-
-
-
- ptr_free_block = search_free_list(req_size); //searches free list, returns null if no free list found
-
-  if (ptr_free_block == NULL) {
+  if (ptr_free_block == NULL)
+  {
     // No suitable block found, request more space.
-    fprintf(stderr, "REQUESTING MORE SPACE \n");
-     fprintf(stderr, "current size of heap %d bytes \n", mem_heapsize());
-    
-    request_more_space(req_size); //throws errpr when we request 56 bytes???? , seg fault
-    //maybe since the allocated block is not in free list?
-    //error when freeblock->next is called
 
-     fprintf(stderr, "done requesting space \n");
+    request_more_space(req_size); // request space for required size
 
-    ptr_free_block = search_free_list(req_size);
+    ptr_free_block = search_free_list(req_size); // search free list for new requested block
   }
-  
- 
-
-  fprintf(stderr, "FOUND FREE BLOCK OF %d bytes big\n", SIZE(ptr_free_block->size_and_tags) );
-
 
   // Remove the block we found from the free list.
   remove_free_block(ptr_free_block);
 
-  // Check if we need to split the block.
-    //uses the Size() macro to extract the ptr_free_block.size_and_tags
-  //uses the -> to get the size_and_tags size_t info to use in the SIZE macro
+  // get the size of the free block we found
+  // uses the Size() macro to extract the ptr_free_block.size_and_tags
+  // uses the -> to get the size_and_tags info to use in the SIZE macro
   block_size = SIZE(ptr_free_block->size_and_tags);
 
+  // Check if we need to split the block.
+  // ONLY SPLITS IF THE SPLITTED FREE BLOCK WOULD FIT THE MINIMUM 32BYTE BLOCK SIZE, 8B HEAD, 8B NEXT, 8B PREV, 8BFOOTER
+  // if it would be less than minimum block size do else
+  if ((block_size - req_size) >= MIN_BLOCK_SIZE)
+  {
 
-  //if the size of the block is greater than the required size, and the min block size
- 
-  if ((block_size - req_size) >= MIN_BLOCK_SIZE) {
-    //ONLY SPLITS IF THE SPLITTED FREE BLOCK WOULD FIT THE MINIMUM 32BYTE BLOCK SIZE, 8B HEAD, 8B NEXT, 8B PREV, 8BFOOTER
-    //WE WERE GETTING ERROR BECAUSE THE COALESNE FUNCTION WAS TRYING TO ACCESS .NEXT ON 8B BLOCK THAT COULDN'T HAVE A .NEXT
-    //ACCSESSING OUT OF BOUNDS CAUSED A SEG FAULT
+    // Split the block.
+    // remaining_block is the new free block to the right of our [alocated block][freeblock]
+    block_info *remaining_block = (block_info *)UNSCALED_POINTER_ADD(ptr_free_block, req_size); // create a new block pointing to the start of the extra space we will split
 
-    fprintf(stderr, "splitting block since free block was too big\n");
+    // update size of remaining_block
+    remaining_block->size_and_tags = block_size - req_size; // the size of our block - the size we wanted to allocate
 
-    //Split the block.
-    block_info* remaining_block = (block_info*)UNSCALED_POINTER_ADD(ptr_free_block, req_size);  //create a new block pointing to the start of the extra space we will split
+    // change the preceding used tag to 1 for new block, since comes after the allocated block
+    remaining_block->size_and_tags |= TAG_PRECEDING_USED; // sets the preceding bit used to 1 in the following block
 
-    //update size of block to free
-    remaining_block->size_and_tags = block_size - req_size; //the size of our block - the size we wanted to allocate
+    // sets is allocated to 0 for the split block
+    remaining_block->size_and_tags &= ~TAG_USED;
 
-   //change the preceding used tag to 1 for new block, since comes after allocated blocks 
-    remaining_block->size_and_tags |= TAG_PRECEDING_USED; //sets the preceding bit used to 1 in the following block
+    // update the remaining block's footer, copy the header
+    ((block_info *)UNSCALED_POINTER_ADD(remaining_block, SIZE(remaining_block->size_and_tags) - WORD_SIZE))->size_and_tags = remaining_block->size_and_tags;
 
-     //sets is allocated to 0 for the split block
-    remaining_block->size_and_tags &= ~TAG_USED; 
+    // extracts the preceding_tag from the entireblock before the split
+    size_t free_block_preceding_tag = ptr_free_block->size_and_tags & TAG_PRECEDING_USED;
 
-     // Update the remaining block's footer.
-    ((block_info*)UNSCALED_POINTER_ADD(remaining_block, SIZE(remaining_block->size_and_tags) - WORD_SIZE))->size_and_tags = remaining_block->size_and_tags;
+    // Update the size of the allocated block using the old free_block_preceding_tag
+    // sets the size and tags of the allocated block
+    // size = req size, tag used = 1, Tag_preceding_used = whatever the block had before the split
+    ptr_free_block->size_and_tags = (req_size) | TAG_USED | free_block_preceding_tag;
 
-
-    //Update the size of the allocated block.
-    size_t free_block_preceding_tag = ptr_free_block->size_and_tags & TAG_PRECEDING_USED; //should be set to 1 if was preceding
-
-    ptr_free_block->size_and_tags = (req_size) | TAG_USED | free_block_preceding_tag ;
-    //keeps current tag preceding used if 1, keeps 1, if 0 keeps 1
- 
-
-    fprintf(stderr, "split block is %d bytes big\n", SIZE(remaining_block->size_and_tags) );
-
-    // Insert the remaining block back into the free list.
+    // insert the remaining block we split into the free list.
+    //[allocated: prev_preceding_used_val, 1][remainingblock : 2, 0]
     insert_free_block(remaining_block);
-  } 
-  
-  else {
-    // Use the entire block.
-    fprintf(stderr, "not splitting, split free block would only be %d bytes big\n", (block_size - req_size) );
-    ptr_free_block->size_and_tags |= TAG_USED; //sets the used bit
-
-
-    block_info* following_block = (block_info*)UNSCALED_POINTER_ADD(ptr_free_block, block_size);  
-    following_block->size_and_tags |= TAG_PRECEDING_USED;
-
-    //i think the error has something to do with how i am handling the bits when i do not split
-    //------------------------------------------------------------------------------------------------------------------
-    
   }
 
-  fprintf(stderr, "allocated %d, req size is %d size \n", size-WORD_SIZE, req_size); //have to print to standard error to show in debugging
-  fprintf(stderr, "examining heap \n"); //have to print to standard error to show in debugging
+  // Use the entire block
+  // if we split the block it would not match the minimum block size for a free block
+  else
+  {
 
- 
+    // set the free block we found allocated bit to be allocated
+    ptr_free_block->size_and_tags |= TAG_USED; // sets the used bit
+
+    // get the pointer for the following block
+    block_info *following_block = (block_info *)UNSCALED_POINTER_ADD(ptr_free_block, block_size);
+    // set the following block's preceding_used =2 (since we just allocated the block before it)
+    following_block->size_and_tags |= TAG_PRECEDING_USED;
+  }
 
   // Return a pointer to the payload of the allocated block.
-  return (void*)UNSCALED_POINTER_ADD(ptr_free_block, WORD_SIZE);
-  //moves the pointer ahead 8B since the pointer points to the header, when we want it to return a pointer pointing to the payload
-  //then casts the returned value of the unscaled pointer add back to a void (since it was cast to a char for the macro)
-
-  //allocates a block of size _
-
-  /*
-  Figure out how big a block you need (factor in alignment, minimum block size, etc)
-2. Call search_free_list() to get a free block that is large enough
-a. NOTE: this will yield a block that is AT LEAST the request size
-b. What happens if we run out of space in the heap?
-3. Remove that block from the free list
-a. May need to split this block to prevent excessive internal fragmentation (see
-NOTE above) -- what dictates whether we can split?
-b. May need to reinsert extra block into the free list if we split
-4. Update size_and_tags appropriately (do preceding and following blocks need
-updating?)
-5. Return a pointer to the payload of that block
-*/
-
-
+  return (void *)UNSCALED_POINTER_ADD(ptr_free_block, WORD_SIZE);
+  // moves the pointer ahead 8B since the pointer points to the header, when we want it to return a pointer pointing to the payload
+  // then casts the returned value of the unscaled pointer add back to a void pointer(since it was cast to a char for the macro)
 }
-
 
 /* Free the block referenced by ptr. */
-void mm_free(void* ptr) {
+/*
+1. Convert the given used block into a free block (set allocated bit = 0)
+2. Update size_and_tags appropriately
+  -set following blocks preceding_used bit = 0
+  - update the footer size_and_tags as well
+3. Reinsert free block into the head of the free list
+4. Coalesce preceding and following blocks if necessary
+*/
+void mm_free(void *ptr)
+{
   size_t payload_size;
-  block_info* block_to_free;
-  block_info* following_block;
-  block_info* footer;
+  block_info *block_to_free;
+  block_info *following_block;
+  block_info *footer;
   size_t block_size;
 
-  // TODO: Implement mm_free.  You can change or remove the declaraions
-  // above.  They are included as minor hints.
-
-  if (ptr == NULL) {
-        return;
-    }
-
-   fprintf(stderr, "----------------------------------------------------------------------- \n");
-  //examine_heap()
-  //have to test if previous block is allocated somehow
-  //or maybe test if head dont set previous block to be allocated
-
+  // if the given pointer to free is null, do nothing
+  if (ptr == NULL)
+  {
+    return;
+  }
 
   // Convert the given used block into a free block.
-  //subtracts the pointer to the block by the word size, given allocated block will point to payload so we need to move back 8bytes to get to start of block (header)
-  //block to free points to start of block
-  block_to_free = (block_info*)UNSCALED_POINTER_SUB(ptr, WORD_SIZE);
+  // subtracts the pointer to the block by the word size, given allocated block will point to payload so we need to move back 8bytes to get to start of block (header)
+  // sets block to free points to the start of the block
+  block_to_free = (block_info *)UNSCALED_POINTER_SUB(ptr, WORD_SIZE);
 
+  // gets the size of the block to free
   block_size = SIZE(block_to_free->size_and_tags);
 
-  fprintf(stderr, "FREE CALLED for %d bytes \n", SIZE(block_to_free->size_and_tags));
+  // sets block to free's used bit to 0
+  block_to_free->size_and_tags &= ~TAG_USED; // keeps everything but sets tag used bit to zero for the block we are going to free
 
+  // sets following block pointer to start at the end of the current block to free
+  following_block = (block_info *)UNSCALED_POINTER_ADD(block_to_free, block_size);
 
-  //sets block to free tag used bit to 0
-  block_to_free->size_and_tags &= ~TAG_USED; //keeps everything but sets tag used bit to zero for the block we are going to free
+  // set the following block's preceding used tag to 0
+  following_block->size_and_tags &= ~TAG_PRECEDING_USED; // sets the preceding bit used to 0 in the following block
 
-
-   //following block starts at end of current block
-  following_block = (block_info*)UNSCALED_POINTER_ADD(block_to_free, block_size);
-
-  //jump to following block and change the preceding used tag to 0
-  following_block->size_and_tags &= ~TAG_PRECEDING_USED; //sets the preceding bit used to 0 in the following block
-
-
-
-    //update the footer size_and_tags for block to free
-     //block to free + size - word sizes = start of footer
-  //sets the size and tags to be the same as the header
-  footer =  ((block_info*)UNSCALED_POINTER_SUB(following_block, WORD_SIZE));
+  // update the footer size_and_tags for block to free
+  // start of followingblock - word size = start of footer for currentblock
+  footer = ((block_info *)UNSCALED_POINTER_SUB(following_block, WORD_SIZE));
+  // sets the size and tags to be the same as the header
   footer->size_and_tags = block_to_free->size_and_tags;
 
+  // reinsert the free block into the head of the free list.
+  insert_free_block(block_to_free);
 
-    //reinsert the free block into the head of the free list.
-   insert_free_block(block_to_free);
-
-
-    //coalesce preceding and following blocks if necessary.
+  // coalesce preceding and following blocks if necessary.
   coalesce_free_block(block_to_free);
-
-
-
-  //examine_heap();
-
-  //if we free a block we need to change the block afters bits of preceding used to 0
-
 }
-
 
 /*
  * A heap consistency checker. Optional, but recommended to help you debug
