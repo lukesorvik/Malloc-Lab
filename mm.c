@@ -371,32 +371,28 @@ void *mm_malloc(size_t size)
   size_t req_size;
   block_info *ptr_free_block = NULL;
   size_t block_size;
-  size_t preceding_block_use_tag;
+  size_t free_block_preceding_tag;
 
   // Zero-size requests get NULL.
-  if (size == 0)
-  {
+  if (size == 0) {
     return NULL;
   }
 
   // Add one word for the initial size header.
   // Note that we don't need a footer when the block is used/allocated!
   size += WORD_SIZE; // word size is 8B, size of header
-  if (size <= MIN_BLOCK_SIZE)
-  {
+  if (size <= MIN_BLOCK_SIZE) {
     // Make sure we allocate enough space for the minimum block size.
     req_size = MIN_BLOCK_SIZE;
   }
-  else
-  {
+  else {
     // Round up for proper alignment.
     req_size = ALIGNMENT * ((size + ALIGNMENT - 1) / ALIGNMENT);
   }
 
   ptr_free_block = search_free_list(req_size); // searches free list, returns null if no free list found
 
-  if (ptr_free_block == NULL)
-  {
+  if (ptr_free_block == NULL) {
     // No suitable block found, request more space.
 
     request_more_space(req_size); // request space for required size
@@ -415,8 +411,7 @@ void *mm_malloc(size_t size)
   // Check if we need to split the block.
   // ONLY SPLITS IF THE SPLITTED FREE BLOCK WOULD FIT THE MINIMUM 32BYTE BLOCK SIZE, 8B HEAD, 8B NEXT, 8B PREV, 8BFOOTER
   // if it would be less than minimum block size do else
-  if ((block_size - req_size) >= MIN_BLOCK_SIZE)
-  {
+  if ((block_size - req_size) >= MIN_BLOCK_SIZE) {
 
     // Split the block.
     // remaining_block is the new free block to the right of our [alocated block][freeblock]
@@ -435,7 +430,7 @@ void *mm_malloc(size_t size)
     ((block_info *)UNSCALED_POINTER_ADD(remaining_block, SIZE(remaining_block->size_and_tags) - WORD_SIZE))->size_and_tags = remaining_block->size_and_tags;
 
     // extracts the preceding_tag from the entireblock before the split
-    size_t free_block_preceding_tag = ptr_free_block->size_and_tags & TAG_PRECEDING_USED;
+    free_block_preceding_tag = ptr_free_block->size_and_tags & TAG_PRECEDING_USED;
 
     // Update the size of the allocated block using the old free_block_preceding_tag
     // sets the size and tags of the allocated block
@@ -449,8 +444,7 @@ void *mm_malloc(size_t size)
 
   // Use the entire block
   // if we split the block it would not match the minimum block size for a free block
-  else
-  {
+  else {
 
     // set the free block we found allocated bit to be allocated
     ptr_free_block->size_and_tags |= TAG_USED; // sets the used bit
@@ -469,6 +463,7 @@ void *mm_malloc(size_t size)
 
 /* Free the block referenced by ptr. */
 /*
+How i implemented Free
 1. Convert the given used block into a free block (set allocated bit = 0)
 2. Update size_and_tags appropriately
   -set following blocks preceding_used bit = 0
@@ -478,15 +473,13 @@ void *mm_malloc(size_t size)
 */
 void mm_free(void *ptr)
 {
-  size_t payload_size;
   block_info *block_to_free;
   block_info *following_block;
   block_info *footer;
   size_t block_size;
 
   // if the given pointer to free is null, do nothing
-  if (ptr == NULL)
-  {
+  if (ptr == NULL) {
     return;
   }
 
@@ -516,7 +509,7 @@ void mm_free(void *ptr)
   // reinsert the free block into the head of the free list.
   insert_free_block(block_to_free);
 
-  // coalesce preceding and following blocks if necessary.
+  // coalesce blocks if necessary.
   coalesce_free_block(block_to_free);
 }
 
