@@ -1,19 +1,44 @@
 *****************************
 * Lab 5 Synthesis Questions *
 *****************************
-Name(s):  
-NetID(s): 
+Name(s):  Luke Sorvik  
+NetID(s): lukesorv
 
 
 -----------------------------------------------------------
-1) Alignment: 
+1) Alignment: 16 byte alignment.
    Reasoning:
+Test* = Malloc(1) =0x…b0
+Class_grade* = 0x…d0
+B0-d0 = difference of 32 bytes
+
+So malloc(1) has structure of [header(8B)|1byte payload| 23 byte internal frag]
+From this I know the minimum block size is 32 bytes.
+
+Test* = Malloc(25) =0x…b0
+Class_grade* = 0x…e0
+B0-d0 = difference of 48 bytes
+
+
+Malloc(25) is [header(8B)|25B payload|internal frag to reach alignment]
+Since the class_grade points to the payload of the next block we have
+
+[header(8B)|25B payload|internal frag to reach alignment] [header8Byte|classgrade payload]
+The difference between the test payload and the grade payload is 48 bytes so
+25 + fragmentation + 8 = 48
+X = 15
+The fragmentation is 15, but if were 8 bit aligned it would have just used 7 bytes for fragmentation to get to 40bytes total for the entire block 8+25+7 = 40 
+(since 40 is aligned with 8 and not 16), but since it adds 15 bytes instead so it must be an alignment of 16 bytes.
+
 
 
 
 -----------------------------------------------------------
-2) Boundary Tag Size:  
+2) Boundary Tag Size:  8 bytes
    Reasoning:
+Since the minimum block size is 32 bytes, when test* = malloc(24) the difference between the two pointers of test* and grades* is 32 bytes. 
+Since malloc returns an address to the payload of the block and we only allocated 24 bytes for the payload. The header must be 8 bytes since:
+32 byte difference - 24byte payload = 8 bytes leftover for class_grade* header
 
 
 
