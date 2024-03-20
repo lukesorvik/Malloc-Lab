@@ -14,6 +14,7 @@
  *    (i.e., to the header).
  *  - Pointers returned by mm_malloc point to the beginning of the payload
  *    (i.e., to the word after the header).
+ 
  *
  * ALLOCATOR BLOCKS:
  *  - See definition of block_info struct fields further down
