@@ -1,11 +1,23 @@
-#####################################################################
+# Malloc Lab
+This was a project to implement functions for an explicit allocator with an explicit free list using c. I made some trace files to test my implementation in traces/ 
+
+
+The main file edited was :
+
+```bash
+mm.c
+```
+
+
+Details about how to run the project are below. 
+
+
 # CS:APP Malloc Lab
 # Handout files for students
 #
 # Copyright (c) 2002, R. Bryant and D. O'Hallaron, All rights reserved.
 # May not be used, modified, or copied without permission.
-#
-######################################################################
+
 
 ***********
 Main Files:
