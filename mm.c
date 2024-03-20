@@ -2,7 +2,7 @@
  * CSE 351 Lab 5 (Dynamic Storage Allocator)
  *
  * Name(s):  Luke Sorvik 
- * NetID(s): lukesorv
+ *
  *
  * NOTES:
  *  - Explicit allocator with an explicit free-list
